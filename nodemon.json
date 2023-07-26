@@ -1,0 +1,13 @@
+{
+  "watch": [
+    "src",
+    "playground"
+  ],
+  "ext": "ts,json",
+  "ignore": [
+    "node_modules",
+    "dist",
+    "src/**/*.spec.ts"
+  ],
+  "exec": "npx ts-node ./playground/playground.ts"
+}
