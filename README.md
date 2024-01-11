@@ -1,6 +1,6 @@
-# ws-rxjs
+# rxjs-ws
 
-If you're using RxJS and WebSockets, you can consider using **`ws-rxjs`** for managing the socket connections, incoming
+If you're using RxJS and WebSockets, you can consider using **`rxjs-ws`** for managing the socket connections, incoming
 and out-coming messages.
 
 WebSocket library to simply integrate with RxJS.
@@ -10,7 +10,7 @@ WebSocket library to simply integrate with RxJS.
 ## Installation
 
 ```bash
-npm install ws-rxjs
+npm install @nichitaa/rxjs-ws
 ```
 
 ## Usage

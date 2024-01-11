@@ -1,6 +1,7 @@
 // ref: https://github.com/insidewhy/rxjs-websockets
 
-import { Observable, Subscription, Subject } from 'rxjs';
+import type { Subscription } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 
 export type WebSocketMessageType = string | ArrayBuffer | Blob | ArrayBufferView;
 
@@ -29,11 +30,11 @@ export type CreateWebSocketObservableConfig = {
 };
 
 export type GetWebSocketMessagesObservable<T = WebSocketMessageType> = (
-  requests$: Observable<WebSocketMessageType>,
+  requests$: Observable<WebSocketMessageType>
 ) => Observable<T>;
 
 export const createWebSocketObservable = <T extends WebSocketMessageType = WebSocketMessageType>(
-  params: CreateWebSocketObservableConfig,
+  params: CreateWebSocketObservableConfig
 ): Observable<GetWebSocketMessagesObservable<T>> => {
   const { createWebSocketInstance = defaultCreateWebSocket, url, protocols } = params;
 
@@ -73,7 +74,7 @@ export const createWebSocketObservable = <T extends WebSocketMessageType = WebSo
     };
 
     socket.onmessage = ({ data }) => {
-      messagesSubject.next(data);
+      messagesSubject.next(data as T);
     };
 
     socket.onerror = (error: EventWithMessage) => {
@@ -94,7 +95,7 @@ export const createWebSocketObservable = <T extends WebSocketMessageType = WebSo
         const error = new ErrorWithReasonAndCode({
           message: 'Unexpected WebSocket close',
           code,
-          reason,
+          reason
         });
 
         observer.error(error);
