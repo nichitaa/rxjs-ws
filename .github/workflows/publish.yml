@@ -21,7 +21,7 @@ jobs:
       - run: npm i
       - uses: changesets/action@v1
         with:
-          commit: "chore: update version"
+          commit: "chore(repo): version packages"
           title: "changeset create release"
           publish: npm run release
         env:
