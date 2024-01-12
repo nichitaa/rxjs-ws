@@ -1,6 +1,7 @@
 {
   "name": "@nichitaa/rxjs-ws",
   "version": "1.0.3",
+  "private": false,
   "publishConfig": {
     "access": "public"
   },
@@ -27,7 +28,8 @@
   },
   "scripts": {
     "build": "tsup",
-    "lint": "eslint . && publint"
+    "lint": "eslint . && publint",
+    "release": "npm run build && npx changeset publish"
   },
   "keywords": [
     "websocket",
