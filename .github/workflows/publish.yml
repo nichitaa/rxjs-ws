@@ -21,7 +21,9 @@ jobs:
       - run: npm i
       - uses: changesets/action@v1
         with:
-          publish: npm run build
+          commit: "chore: update version"
+          title: "changeset create release"
+          publish: npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

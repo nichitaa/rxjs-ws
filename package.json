@@ -27,7 +27,8 @@
   },
   "scripts": {
     "build": "tsup",
-    "lint": "eslint . && publint"
+    "lint": "eslint . && publint",
+    "release": "npm run build && changeset publish"
   },
   "keywords": [
     "websocket",
