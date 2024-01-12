@@ -1,5 +1,11 @@
 # @nichitaa/rxjs-ws
 
+## 1.0.4
+
+### Patch Changes
+
+- 85056e7: Updated package.json scripts
+
 ## 1.0.3
 
 ### Patch Changes
