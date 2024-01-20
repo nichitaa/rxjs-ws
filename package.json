@@ -32,8 +32,11 @@
   },
   "scripts": {
     "build": "tsup",
-    "lint": "eslint . && publint",
-    "release": "npm run build && npx changeset publish"
+    "help": "tsx watch src/test/help.ts",
+    "lint": "eslint . --ext ts --report-unused-disable-directives --max-warnings 0",
+    "publint": "npx publint",
+    "release": "npm run build && npx changeset publish",
+    "test": "vitest run"
   },
   "keywords": [
     "websocket",
@@ -49,10 +52,13 @@
     "@changesets/cli": "^2.27.1",
     "@typescript-eslint/eslint-plugin": "^6.18.1",
     "@typescript-eslint/parser": "^6.18.1",
+    "@vitest/ui": "^1.2.1",
     "eslint": "^8.56.0",
     "prettier": "^3.1.1",
     "publint": "^0.2.7",
-    "tsup": "^8.0.1"
+    "tsup": "^8.0.1",
+    "tsx": "^4.7.0",
+    "vitest": "^1.2.1"
   },
   "peerDependencies": {
     "rxjs": "^7.x"

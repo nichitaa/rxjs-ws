@@ -21,8 +21,7 @@ import {
 } from 'rxjs';
 import { QueueSubject } from './queue-subject';
 
-export interface WebSocketConnectorConfig
-  extends CreateWebSocketObservableConfig {
+export interface WebSocketConnectorConfig extends CreateWebSocketObservableConfig {
   serializer?: SerializeFn<unknown>;
   deserializer?: DeserializeFn<unknown>;
 }
@@ -46,9 +45,7 @@ export const forceReconnectMessage = 'force reconnect' as const;
 export type SerializeFn<T> = (value: T) => WebSocketMessageType;
 export type DeserializeFn<T> = (value: unknown) => T;
 
-const DEFAULT_PARAMS: Required<
-  Pick<WebSocketConnectorConfig, 'deserializer' | 'serializer'>
-> = {
+const DEFAULT_PARAMS: Required<Pick<WebSocketConnectorConfig, 'deserializer' | 'serializer'>> = {
   deserializer: (value) => {
     if (typeof value !== 'string') throw new Error('value must be string');
     return JSON.parse(value) as unknown;
@@ -56,85 +53,76 @@ const DEFAULT_PARAMS: Required<
   serializer: (value) => JSON.stringify(value),
 };
 
-export class WebSocketConnector<
-  T extends WebSocketMessageType = WebSocketMessageType
-> {
-  private readonly socket$: Observable<GetWebSocketMessagesObservable<T>>;
-  private readonly statusSubject = new BehaviorSubject<Status>(
-    STATUS.uninitialized
-  );
-  private readonly requestsSubject = new QueueSubject<unknown>();
-  private readonly messagesSubject = new Subject<unknown>();
-  private readonly forceReconnectSubject = new Subject<string>();
-  private readonly sharedMessages$ = this.messagesSubject.pipe(share());
-  private messagesSubscription: Subscription | undefined;
-  private readonly serializer: SerializeFn<unknown>;
-  private readonly deserializer: DeserializeFn<unknown>;
-  private messagesObserver: Observer<unknown> = {
+export class WebSocketConnector<T extends WebSocketMessageType = WebSocketMessageType> {
+  readonly #socket$: Observable<GetWebSocketMessagesObservable<T>>;
+  readonly #statusSubject = new BehaviorSubject<Status>(STATUS.uninitialized);
+  readonly #requestsSubject = new QueueSubject<unknown>();
+  readonly #messagesSubject = new Subject<unknown>();
+  readonly #forceReconnectSubject = new Subject<string>();
+  readonly #sharedMessages$ = this.#messagesSubject.pipe(share());
+  #messagesSubscription: Subscription | undefined;
+  readonly #serializer: SerializeFn<unknown>;
+  readonly #deserializer: DeserializeFn<unknown>;
+  #messagesObserver: Observer<unknown> = {
     next: (message) => {
-      this.messagesSubject.next(message);
+      this.#messagesSubject.next(message);
     },
     error: (error) => {
-      this.statusSubject.next(STATUS.disconnected);
-      this.messagesSubject.error(error);
+      this.#statusSubject.next(STATUS.disconnected);
+      this.#messagesSubject.error(error);
     },
     complete: () => {
-      this.statusSubject.next(STATUS.disconnected);
-      this.messagesSubject.complete();
-      this.requestsSubject.complete();
-      this.forceReconnectSubject.complete();
+      this.#statusSubject.next(STATUS.disconnected);
+      this.#messagesSubject.complete();
+      this.#requestsSubject.complete();
+      this.#forceReconnectSubject.complete();
     },
   };
 
   constructor(params: WebSocketConnectorConfig) {
-    this.serializer = params.serializer ?? DEFAULT_PARAMS.serializer;
-    this.deserializer = params.deserializer ?? DEFAULT_PARAMS.deserializer;
+    this.#serializer = params.serializer ?? DEFAULT_PARAMS.serializer;
+    this.#deserializer = params.deserializer ?? DEFAULT_PARAMS.deserializer;
     const { url, protocols, createWebSocketInstance } = params;
-    this.socket$ = createWebSocketObservable<T>({
+    this.#socket$ = createWebSocketObservable<T>({
       createWebSocketInstance,
       protocols,
       url,
     });
   }
 
-  private applySerialization = (
-    getWebSocketMessagesFn: GetWebSocketMessagesObservable<T>
-  ) => {
-    return getWebSocketMessagesFn(
-      this.requestsSubject.pipe(map((r) => this.serializer(r)))
-    ).pipe(map((r) => this.deserializer(r)));
+  #applySerialization = (getWebSocketMessagesFn: GetWebSocketMessagesObservable<T>) => {
+    return getWebSocketMessagesFn(this.#requestsSubject.pipe(map((r) => this.#serializer(r)))).pipe(
+      map((r) => this.#deserializer(r)),
+    );
   };
 
-  public connect = (config?: ConnectConfig): void => {
+  connect = (config?: ConnectConfig): void => {
     const retryConfig = config?.retryConfig;
 
-    if (this.messagesSubscription)
-      throw new Error(`socket connection is already opened`);
+    if (this.#messagesSubscription) throw new Error(`socket connection is already opened`);
 
     const getWebSocketMessages$ = merge(
-      this.socket$,
-      this.forceReconnectSubject.pipe(
+      this.#socket$,
+      this.#forceReconnectSubject.pipe(
         tap((message) => {
+          if (!retryConfig) {
+            console.warn(
+              'forceReconnect requires `retryConfig` to properly reconnect to socket, otherwise it will emit an observable.error()',
+            );
+          }
           throw new Error(message);
-        })
-      )
-    ).pipe(
-      filter(
-        (v): v is GetWebSocketMessagesObservable<T> => typeof v === 'function'
-      )
-    );
+        }),
+      ),
+    ).pipe(filter((v): v is GetWebSocketMessagesObservable<T> => typeof v === 'function'));
 
-    this.messagesSubscription = getWebSocketMessages$
+    this.#messagesSubscription = getWebSocketMessages$
       .pipe(
         switchMap((getWebSocketMessagesFn) => {
-          if (
-            this.statusSubject.value === STATUS.reconnecting &&
-            retryConfig?.onSuccess
-          ) {
+          if (this.#statusSubject.value === STATUS.reconnecting && retryConfig?.onSuccess) {
             retryConfig.onSuccess();
           }
-          this.statusSubject.next(STATUS.connected);
-          return this.applySerialization(getWebSocketMessagesFn);
+          this.#statusSubject.next(STATUS.connected);
+          return this.#applySerialization(getWebSocketMessagesFn);
         }),
         retryConfig
           ? retry({
@@ -142,7 +130,7 @@ export class WebSocketConnector<
               count: retryConfig.count,
               delay: (error, retryCount) => {
                 if (retryCount === 1) {
-                  this.statusSubject.next(STATUS.reconnecting);
+                  this.#statusSubject.next(STATUS.reconnecting);
                 }
                 if (typeof retryConfig.delay === 'number') {
                   return of(true).pipe(delay(retryConfig.delay));
@@ -153,34 +141,31 @@ export class WebSocketConnector<
                 return of(true);
               },
             })
-          : identity
+          : identity,
       )
-      .subscribe(this.messagesObserver);
+      .subscribe(this.#messagesObserver);
   };
 
-  public send<T>(data: T): void {
-    this.requestsSubject.next(data);
+  send<T>(data: T): void {
+    this.#requestsSubject.next(data);
   }
 
-  public messages = <T>(): Observable<T> => {
-    return this.sharedMessages$ as Observable<T>;
+  messages = <T>(): Observable<T> => {
+    return this.#sharedMessages$ as Observable<T>;
   };
 
-  public get status$(): Observable<Status> {
-    return this.statusSubject.asObservable();
+  get status$(): Observable<Status> {
+    return this.#statusSubject.asObservable();
   }
 
-  public disconnect = (): void => {
-    if (!this.messagesSubscription)
-      throw new Error(`socket connection was not yet established`);
-    this.statusSubject.next(STATUS.disconnected);
-    this.messagesSubscription.unsubscribe();
-    this.messagesSubscription = undefined;
+  disconnect = (): void => {
+    if (!this.#messagesSubscription) throw new Error(`socket connection was not yet established`);
+    this.#statusSubject.next(STATUS.disconnected);
+    this.#messagesSubscription.unsubscribe();
+    this.#messagesSubscription = undefined;
   };
 
-  public forceReconnect = (
-    errorMessage: string = forceReconnectMessage
-  ): void => {
-    this.forceReconnectSubject.next(errorMessage);
+  forceReconnect = (errorMessage: string = forceReconnectMessage): void => {
+    this.#forceReconnectSubject.next(errorMessage);
   };
 }
