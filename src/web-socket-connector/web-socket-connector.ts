@@ -9,6 +9,7 @@ import {
   catchError,
   concat,
   concatMap,
+  defer,
   delay,
   filter,
   identity,
@@ -35,11 +36,12 @@ import {
   SerializeFn,
   Status,
   StreamHandlerParams,
-  StreamHandlerSendParams,
+  StreamHandlerSendRequestParams,
   StreamResponse,
+  TransformResponseOperator,
   WebSocketConnectorConfig,
 } from './types';
-import { FORCE_RECONNECT_MESSAGE, CONN_STATUS, STREAM_STATUS } from './constants';
+import { CONN_STATUS, FORCE_RECONNECT_MESSAGE, STREAM_STATUS } from './constants';
 import { defaultDeserializer, defaultSerializer, filterNullAndUndefined } from './utils';
 
 export class WebSocketConnector<T extends WebSocketMessageType = WebSocketMessageType> {
@@ -158,8 +160,8 @@ export class WebSocketConnector<T extends WebSocketMessageType = WebSocketMessag
     this.#forceReconnectSubject.next(errorMessage);
   };
 
-  getStreamHandler = <TIncomingMessages, TResponse, TRequest, TError>(
-    params: Partial<StreamHandlerParams<TIncomingMessages, TResponse, TRequest, TError>> = {},
+  getStreamHandler = <TEvent, TRes = TEvent, TReq = unknown, TErr = unknown>(
+    params: Partial<StreamHandlerParams<TEvent, TRes, TReq>> = {},
   ) => {
     const {
       default: defaultResponse = undefined,
@@ -170,30 +172,32 @@ export class WebSocketConnector<T extends WebSocketMessageType = WebSocketMessag
     } = params;
 
     const requests$ = new BehaviorSubject<
-      undefined | StreamHandlerSendParams<TIncomingMessages, TResponse, TRequest, TError>
+      undefined | StreamHandlerSendRequestParams<TEvent, TRes, TReq>
     >(undefined);
 
-    const uninitializedValue: StreamResponse<TResponse, TRequest, TError> = {
+    const uninitializedValue: StreamResponse<TRes, TReq, TErr> = {
       status: STREAM_STATUS.uninitialized,
       response: defaultResponse,
     };
 
-    const $ = new BehaviorSubject<StreamResponse<TResponse, TRequest, TError>>(uninitializedValue);
+    const $ = new BehaviorSubject<StreamResponse<TRes, TReq, TErr>>(uninitializedValue);
 
     requests$
       .pipe(
         filterNullAndUndefined(),
         transformRequests,
         concatMap((currentProcessingRequest) => {
-          const { request, transformResponse } = currentProcessingRequest;
+          const defaultTransformResponse = identity as TransformResponseOperator<TEvent, TRes>;
+          const { request, transformResponse = defaultTransformResponse } =
+            currentProcessingRequest;
 
-          const ready$ = this.messages<TIncomingMessages>().pipe(
+          const ready$ = this.messages<TEvent>().pipe(
             transformResponse,
             map((response) => ({
               response,
               error: undefined,
             })),
-            catchError((error: TError) => of({ error })),
+            catchError((error: TErr) => of({ error })),
             map((value) => ({
               ...value,
               status: STREAM_STATUS.ready,
@@ -211,32 +215,52 @@ export class WebSocketConnector<T extends WebSocketMessageType = WebSocketMessag
             take(1),
           );
 
-          const newRequest$ = requests$.pipe(
+          const newRequest$ = defer(() => {
+            const nextRequest$ = requests$.pipe(
+              filter((x) => x !== currentProcessingRequest),
+              take(1),
+            );
+            return nextRequest$.pipe(
+              concatMap(() => {
+                if (awaitReadyStatusBeforeNextRequest) return ready$.pipe(take(1));
+                return of(true);
+              }),
+            );
+          });
+
+          const takeUntil$ = race(wsDisconnectedStatus$, newRequest$).pipe(
+            // this allows for subscription of the concat(ready$) to run and next the emission of ready$
+            // before emitting newRequest$
             observeOn(asyncScheduler),
-            filter((x) => x !== currentProcessingRequest),
-            concatMap(() => (awaitReadyStatusBeforeNextRequest ? ready$ : of(true))), // at least 1 emission from ready$
+          );
+
+          const wsConnectedStatus$ = this.status$.pipe(
+            filter((x) => x === CONN_STATUS.connected),
             take(1),
           );
 
-          const takeUntil$ = race(wsDisconnectedStatus$, newRequest$);
+          const loading$: Observable<StreamResponse<TRes, TReq, TErr>> = wsConnectedStatus$.pipe(
+            concatMap(() =>
+              of({
+                status: STREAM_STATUS.loading,
+                request,
+                response: resetResponseOnNextRequest ? undefined : $.value.response,
+                error: resetErrorOnNextRequest ? undefined : $.value.error,
+              }).pipe(
+                tap(({ request }) => {
+                  this.send(request);
+                }),
+              ),
+            ),
+          );
 
-          const loading$: Observable<StreamResponse<TResponse, TRequest, TError>> = of({
-            status: STREAM_STATUS.loading,
-            request,
-            response: resetResponseOnNextRequest ? undefined : $.value.response,
-            error: resetErrorOnNextRequest ? undefined : $.value.error,
-          });
-
-          setTimeout(() => {
-            this.send(request);
-          }, 0);
-
-          return concat(loading$, ready$).pipe(
+          const concat$ = concat(loading$, ready$.pipe(takeUntil(takeUntil$))).pipe(
             tap((value) => {
               $.next({ ...$.value, ...value });
             }),
-            takeUntil(takeUntil$),
           );
+
+          return concat$;
         }),
       )
       .subscribe({
@@ -245,9 +269,8 @@ export class WebSocketConnector<T extends WebSocketMessageType = WebSocketMessag
         },
       });
 
-    const send = (
-      params: StreamHandlerSendParams<TIncomingMessages, TResponse, TRequest, TError>,
-    ) => {
+    const send = (params: StreamHandlerSendRequestParams<TEvent, TRes, TReq>) => {
+      // create a shallow copy of the send request params to referentially check it in nextRequest$
       requests$.next({ ...params });
     };
 

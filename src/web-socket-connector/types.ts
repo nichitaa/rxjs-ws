@@ -17,25 +17,33 @@ export interface ConnectConfig {
 }
 
 export type Status = (typeof CONN_STATUS)[keyof typeof CONN_STATUS];
+
 export type SerializeFn<T> = (value: T) => WebSocketMessageType;
+
 export type DeserializeFn<T> = (value: unknown) => T;
+
 export type StreamStatus = (typeof STREAM_STATUS)[keyof typeof STREAM_STATUS];
-export type StreamResponse<TResponse, TRequest, TError> = {
+
+export type StreamResponse<TRes, TReq, TErr> = {
   status: StreamStatus;
-  response?: TResponse;
-  request?: TRequest;
-  error?: TError;
+  response?: TRes;
+  request?: TReq;
+  error?: TErr;
 };
-export type StreamHandlerParams<TIncomingMessages, TResponse, TRequest, TError> = {
-  default: TResponse;
-  transformRequests: (
-    source$: Observable<StreamHandlerSendParams<TIncomingMessages, TResponse, TRequest, TError>>,
-  ) => Observable<StreamHandlerSendParams<TIncomingMessages, TResponse, TRequest, TError>>;
+
+export type StreamHandlerParams<TEvent, TRes, TReq> = {
+  default: TRes;
+  transformRequests: TransformResponseOperator<StreamHandlerSendRequestParams<TEvent, TRes, TReq>>;
   resetResponseOnNextRequest: boolean;
   resetErrorOnNextRequest: boolean;
   awaitReadyStatusBeforeNextRequest: boolean;
 };
-export type StreamHandlerSendParams<TIncomingMessages, TResponse, TRequest, TError> = {
-  request: TRequest;
-  transformResponse: (source$: Observable<TIncomingMessages>) => Observable<TResponse>;
+
+export type StreamHandlerSendRequestParams<TEvent, TRes, TReq> = {
+  request: TReq;
+  transformResponse?: TransformResponseOperator<TEvent, TRes>;
 };
+
+export type TransformResponseOperator<TIn, TOut = TIn> = (
+  source$: Observable<TIn>,
+) => Observable<TOut>;

@@ -30,11 +30,11 @@ export type CreateWebSocketObservableConfig = {
 };
 
 export type GetWebSocketMessagesObservable<T = WebSocketMessageType> = (
-  requests$: Observable<WebSocketMessageType>
+  requests$: Observable<WebSocketMessageType>,
 ) => Observable<T>;
 
 export const createWebSocketObservable = <T extends WebSocketMessageType = WebSocketMessageType>(
-  params: CreateWebSocketObservableConfig
+  params: CreateWebSocketObservableConfig,
 ): Observable<GetWebSocketMessagesObservable<T>> => {
   const { createWebSocketInstance = defaultCreateWebSocket, url, protocols } = params;
 
@@ -95,7 +95,7 @@ export const createWebSocketObservable = <T extends WebSocketMessageType = WebSo
         const error = new ErrorWithReasonAndCode({
           message: 'Unexpected WebSocket close',
           code,
-          reason
+          reason,
         });
 
         observer.error(error);

@@ -1,37 +1,11 @@
 import { TestScheduler } from 'rxjs/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { WebSocketConnector } from '../web-socket-connector/web-socket-connector';
 import { EventWithMessage } from '../create-web-socket-observable';
 import { delay, from, of, tap } from 'rxjs';
 import { concatMap } from 'rxjs/internal/operators/concatMap';
-import {
-  ConnectConfig,
-  DeserializeFn,
-  SerializeFn,
-  WebSocketConnectorConfig,
-} from '../web-socket-connector/types';
-import { FORCE_RECONNECT_MESSAGE, CONN_STATUS } from '../web-socket-connector/constants';
-
-const getMockWebsocketConnector = (params?: Partial<WebSocketConnectorConfig>) => {
-  const mockSocket = {
-    onmessage: vi.fn(),
-    onopen: vi.fn(),
-    onclose: vi.fn(),
-    onerror: vi.fn(),
-    close: vi.fn(),
-    send: vi.fn((data: string) => {
-      mockSocket.onmessage({ data });
-    }),
-  };
-  const socket = mockSocket as unknown as WebSocket;
-  const wsConnector = new WebSocketConnector({
-    url: '',
-    createWebSocketInstance: () => socket,
-    ...params,
-  });
-
-  return { socket, wsConnector };
-};
+import { ConnectConfig, DeserializeFn, SerializeFn } from '../web-socket-connector/types';
+import { CONN_STATUS, FORCE_RECONNECT_MESSAGE } from '../web-socket-connector/constants';
+import { getMockWebsocketConnector } from './get-mock-websocket.connector';
 
 describe('[WebSocketConnector] rxjs marbles tests', () => {
   let testScheduler: TestScheduler;
@@ -42,10 +16,7 @@ describe('[WebSocketConnector] rxjs marbles tests', () => {
   });
 
   it.skip('[example] with expectObservable and delay', () => {
-    const testStream$ = from([1, 2]).pipe(
-      concatMap((x) => of(x).pipe(delay(1000))),
-      tap((x) => console.log('[tap]: ', x)),
-    );
+    const testStream$ = from([1, 2]).pipe(concatMap((x) => of(x).pipe(delay(1000))));
     testScheduler.run(({ expectObservable }) => {
       const expectMarbles = '1s a 999ms (b|)';
       const expectedValues = {
