@@ -1,5 +1,11 @@
 # @nichitaa/rxjs-ws
 
+## 1.0.5
+
+### Patch Changes
+
+- 81482fd: marbles tests and `getStreamHandler` utility
+
 ## 1.0.4
 
 ### Patch Changes
