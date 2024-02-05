@@ -1,6 +1,6 @@
-import { WebSocketConnectorConfig } from '../web-socket-connector/types';
+import type { WebSocketConnectorConfig } from '../core/types';
 import { vi } from 'vitest';
-import { WebSocketConnector } from '../web-socket-connector/web-socket-connector';
+import { WebSocketConnector } from '../core/web-socket-connector';
 
 export const getMockWebsocketConnector = (params?: Partial<WebSocketConnectorConfig>) => {
   const mockSocket = {

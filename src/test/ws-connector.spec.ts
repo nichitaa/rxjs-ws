@@ -1,10 +1,9 @@
 import { TestScheduler } from 'rxjs/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { EventWithMessage } from '../create-web-socket-observable';
 import { delay, from, of, tap } from 'rxjs';
 import { concatMap } from 'rxjs/internal/operators/concatMap';
-import { ConnectConfig, DeserializeFn, SerializeFn } from '../web-socket-connector/types';
-import { CONN_STATUS, FORCE_RECONNECT_MESSAGE } from '../web-socket-connector/constants';
+import { ConnectConfig, DeserializeFn, EventWithMessage, SerializeFn } from '../core/types';
+import { CONNECTION_STATUS, FORCE_RECONNECT_MESSAGE } from '../core/constants';
 import { getMockWebsocketConnector } from './get-mock-websocket.connector';
 
 describe('[WebSocketConnector] rxjs marbles tests', () => {
@@ -44,9 +43,9 @@ describe('[WebSocketConnector] rxjs marbles tests', () => {
     testScheduler.run(({ expectObservable, cold }) => {
       const expectMarbles = 'a 2s b--c';
       const expectedValues = {
-        a: CONN_STATUS.uninitialized,
-        b: CONN_STATUS.connected,
-        c: CONN_STATUS.disconnected,
+        a: CONNECTION_STATUS.uninitialized,
+        b: CONNECTION_STATUS.connected,
+        c: CONNECTION_STATUS.disconnected,
       };
 
       const triggerMarbles = '- 1s a 999ms b--c';
@@ -73,9 +72,9 @@ describe('[WebSocketConnector] rxjs marbles tests', () => {
     testScheduler.run(({ expectObservable, cold }) => {
       const expectMarbles = 'a 2s b--c';
       const expectedValues = {
-        a: CONN_STATUS.uninitialized,
-        b: CONN_STATUS.connected,
-        c: CONN_STATUS.disconnected,
+        a: CONNECTION_STATUS.uninitialized,
+        b: CONNECTION_STATUS.connected,
+        c: CONNECTION_STATUS.disconnected,
       };
 
       const triggerMarbles = '- 1s a 999ms b--c';
@@ -102,9 +101,9 @@ describe('[WebSocketConnector] rxjs marbles tests', () => {
     testScheduler.run(({ expectObservable, cold }) => {
       const expectMarbles = 'a--b--c--b';
       const expectedValues = {
-        a: CONN_STATUS.uninitialized,
-        b: CONN_STATUS.connected,
-        c: CONN_STATUS.reconnecting,
+        a: CONNECTION_STATUS.uninitialized,
+        b: CONNECTION_STATUS.connected,
+        c: CONNECTION_STATUS.reconnecting,
       };
 
       const triggerMarbles = '---a--b--c';
@@ -128,6 +127,7 @@ describe('[WebSocketConnector] rxjs marbles tests', () => {
 
   it('should try to reconnect and emit error notification in case of failure', () => {
     const { wsConnector, socket } = getMockWebsocketConnector();
+    const errorEvent = new Event('Error type event');
 
     testScheduler.run(({ expectObservable, cold }) => {
       const expectMarbles = '--a-b-#';
@@ -149,16 +149,12 @@ describe('[WebSocketConnector] rxjs marbles tests', () => {
           socket.onmessage!({ data: JSON.stringify(expectedValues.b) } as MessageEvent);
         },
         d: () => {
-          socket.onerror!({} as Event); // fail the reconnect
-          socket.onerror!({ message: '[some error]' } as EventWithMessage); // throw error
+          socket.onerror!(errorEvent); // fail the reconnect
+          socket.onerror!(errorEvent); // throw error
         },
       };
 
-      expectObservable(wsConnector.messages()).toBe(
-        expectMarbles,
-        expectedValues,
-        Error('WebSocket error [some error]'),
-      );
+      expectObservable(wsConnector.messages()).toBe(expectMarbles, expectedValues, errorEvent);
       expectObservable(cold(triggerMarbles, triggerValues).pipe(tap((fn) => fn())));
     });
   });
@@ -168,9 +164,9 @@ describe('[WebSocketConnector] rxjs marbles tests', () => {
 
     const expectMarbles = 'a--b-c-b';
     const expectedValues = {
-      a: CONN_STATUS.uninitialized,
-      b: CONN_STATUS.connected,
-      c: CONN_STATUS.disconnected,
+      a: CONNECTION_STATUS.uninitialized,
+      b: CONNECTION_STATUS.connected,
+      c: CONNECTION_STATUS.disconnected,
     };
 
     const triggerMarbles = '---a-b-a';
@@ -224,9 +220,9 @@ describe('[WebSocketConnector] rxjs marbles tests', () => {
 
     const expectStatusMarbles = 'a-b-c';
     const expectedStatusValues = {
-      a: CONN_STATUS.uninitialized,
-      b: CONN_STATUS.connected,
-      c: CONN_STATUS.disconnected,
+      a: CONNECTION_STATUS.uninitialized,
+      b: CONNECTION_STATUS.connected,
+      c: CONNECTION_STATUS.disconnected,
     };
 
     const expectMessagesMarbles = '----#';
@@ -257,9 +253,9 @@ describe('[WebSocketConnector] rxjs marbles tests', () => {
 
     const expectStatusMarbles = 'a-b-c-b';
     const expectedStatusValues = {
-      a: CONN_STATUS.uninitialized,
-      b: CONN_STATUS.connected,
-      c: CONN_STATUS.reconnecting,
+      a: CONNECTION_STATUS.uninitialized,
+      b: CONNECTION_STATUS.connected,
+      c: CONNECTION_STATUS.reconnecting,
     };
 
     const triggerMarbles = '--a-b-c';

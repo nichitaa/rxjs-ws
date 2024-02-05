@@ -14,7 +14,7 @@ export class QueueSubject<T> extends Subject<T> {
   override subscribe(
     observerOrNext?: Partial<Observer<T>> | ((value: T) => void) | null,
     error?: ((error: unknown) => void) | null,
-    complete?: (() => void) | null
+    complete?: (() => void) | null,
   ): Subscription {
     if (observerOrNext == null) {
       return super.subscribe(null, error, complete);

@@ -1,4 +1,4 @@
-export const CONN_STATUS = {
+export const CONNECTION_STATUS = {
   uninitialized: 'uninitialized',
   connected: 'connected',
   reconnecting: 'reconnecting',

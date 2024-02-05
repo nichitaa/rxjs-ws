@@ -1,8 +1,4 @@
-import type {
-  GetWebSocketMessagesObservable,
-  WebSocketMessageType,
-} from '../create-web-socket-observable';
-import { createWebSocketObservable } from '../create-web-socket-observable';
+import { createWebSocket$ } from './create-web-socket-observable';
 import {
   asyncScheduler,
   BehaviorSubject,
@@ -29,91 +25,96 @@ import {
   takeUntil,
   tap,
 } from 'rxjs';
-import { QueueSubject } from '../queue-subject';
+import { QueueSubject } from './queue-subject';
 import {
   ConnectConfig,
   DeserializeFn,
+  GetWebSocketEvents$,
   SerializeFn,
-  Status,
+  ConnectionStatus,
   StreamHandlerParams,
   StreamHandlerSendRequestParams,
   StreamResponse,
-  TransformResponseOperator,
+  TransformOperator,
   WebSocketConnectorConfig,
 } from './types';
-import { CONN_STATUS, FORCE_RECONNECT_MESSAGE, STREAM_STATUS } from './constants';
+import { CONNECTION_STATUS, FORCE_RECONNECT_MESSAGE, STREAM_STATUS } from './constants';
 import { defaultDeserializer, defaultSerializer, filterNullAndUndefined } from './utils';
 
-export class WebSocketConnector<T extends WebSocketMessageType = WebSocketMessageType> {
-  #socket$: Observable<GetWebSocketMessagesObservable<T>>;
-  #statusSubject = new BehaviorSubject<Status>(CONN_STATUS.uninitialized);
-  #requestsSubject = new QueueSubject<unknown>();
-  #messagesSubject = new Subject<unknown>();
-  #forceReconnectSubject = new Subject<string>();
-  #sharedMessages$ = this.#messagesSubject.pipe(share());
-  #messagesSubscription: Subscription | undefined;
-  #serializer: SerializeFn<unknown>;
-  #deserializer: DeserializeFn<unknown>;
-  #messagesObserver: Observer<unknown> = {
-    next: (message) => {
-      this.#messagesSubject.next(message);
+export class WebSocketConnector {
+  #socket$: Observable<GetWebSocketEvents$>;
+  #status$ = new BehaviorSubject<ConnectionStatus>(CONNECTION_STATUS.uninitialized);
+
+  #events$ = new Subject<MessageEvent>();
+  events$ = this.#events$.asObservable();
+
+  #forceReconnect$ = new Subject<string>();
+
+  #eventsSubscription: Subscription | undefined;
+
+  #serializer: SerializeFn;
+  #deserializer: DeserializeFn;
+
+  #sharedMessages$ = this.#events$.pipe(
+    map(({ data }) => this.#deserializer(data)),
+    share(),
+  );
+  #requestsQueue$ = new QueueSubject();
+  #requests$ = this.#requestsQueue$.pipe(map((request) => this.#serializer(request)));
+
+  #eventsObserver: Observer<MessageEvent> = {
+    next: (event) => {
+      this.#events$.next(event);
     },
     error: (error) => {
-      this.#statusSubject.next(CONN_STATUS.disconnected);
-      this.#messagesSubject.error(error);
+      this.#status$.next(CONNECTION_STATUS.disconnected);
+      this.#events$.error(error);
     },
     complete: () => {
-      this.#statusSubject.next(CONN_STATUS.disconnected);
-      this.#messagesSubject.complete();
-      this.#requestsSubject.complete();
-      this.#forceReconnectSubject.complete();
+      this.#status$.next(CONNECTION_STATUS.disconnected);
+      this.#events$.complete();
+      this.#requestsQueue$.complete();
+      this.#forceReconnect$.complete();
     },
   };
 
-  constructor(params: WebSocketConnectorConfig) {
-    this.#serializer = params.serializer ?? defaultSerializer;
-    this.#deserializer = params.deserializer ?? defaultDeserializer;
-    const { url, protocols, createWebSocketInstance } = params;
-    this.#socket$ = createWebSocketObservable<T>({
-      createWebSocketInstance,
-      protocols,
-      url,
-    });
+  constructor({
+    serializer = defaultSerializer,
+    deserializer = defaultDeserializer,
+    ...createSocketParams
+  }: WebSocketConnectorConfig) {
+    this.#serializer = serializer;
+    this.#deserializer = deserializer;
+    this.#socket$ = createWebSocket$(createSocketParams);
   }
-
-  #applySerialization = (getWebSocketMessagesFn: GetWebSocketMessagesObservable<T>) => {
-    return getWebSocketMessagesFn(this.#requestsSubject.pipe(map((r) => this.#serializer(r)))).pipe(
-      map((r) => this.#deserializer(r)),
-    );
-  };
 
   connect = (config?: ConnectConfig): void => {
     const retryConfig = config?.retryConfig;
 
-    if (this.#messagesSubscription) throw new Error(`socket connection is already opened`);
+    if (this.#eventsSubscription) throw new Error(`socket connection is already opened`);
 
     const getWebSocketMessages$ = merge(
       this.#socket$,
-      this.#forceReconnectSubject.pipe(
+      this.#forceReconnect$.pipe(
         tap((message) => {
           if (!retryConfig) {
-            console.warn(
-              'forceReconnect requires `retryConfig` to properly reconnect to socket, otherwise it will emit an observable.error()',
-            );
+            const warn =
+              'forceReconnect requires `retryConfig` to properly reconnect to socket, otherwise it will emit an observable.error()';
+            console.warn(warn);
           }
           throw new Error(message);
         }),
       ),
-    ).pipe(filter((v): v is GetWebSocketMessagesObservable<T> => typeof v === 'function'));
+    ).pipe(filter((v): v is GetWebSocketEvents$ => typeof v === 'function'));
 
-    this.#messagesSubscription = getWebSocketMessages$
+    this.#eventsSubscription = getWebSocketMessages$
       .pipe(
         switchMap((getWebSocketMessagesFn) => {
-          if (this.#statusSubject.value === CONN_STATUS.reconnecting && retryConfig?.onSuccess) {
+          if (this.#status$.value === CONNECTION_STATUS.reconnecting && retryConfig?.onSuccess) {
             retryConfig.onSuccess();
           }
-          this.#statusSubject.next(CONN_STATUS.connected);
-          return this.#applySerialization(getWebSocketMessagesFn);
+          this.#status$.next(CONNECTION_STATUS.connected);
+          return getWebSocketMessagesFn(this.#requests$);
         }),
         retryConfig
           ? retry({
@@ -121,7 +122,7 @@ export class WebSocketConnector<T extends WebSocketMessageType = WebSocketMessag
               count: retryConfig.count,
               delay: (error, retryCount) => {
                 if (retryCount === 1) {
-                  this.#statusSubject.next(CONN_STATUS.reconnecting);
+                  this.#status$.next(CONNECTION_STATUS.reconnecting);
                 }
                 if (typeof retryConfig.delay === 'number') {
                   return of(true).pipe(delay(retryConfig.delay));
@@ -134,30 +135,30 @@ export class WebSocketConnector<T extends WebSocketMessageType = WebSocketMessag
             })
           : identity,
       )
-      .subscribe(this.#messagesObserver);
+      .subscribe(this.#eventsObserver);
   };
 
-  send<T>(data: T): void {
-    this.#requestsSubject.next(data);
+  send<T>(data: T) {
+    this.#requestsQueue$.next(data);
   }
 
   messages = <T>(): Observable<T> => {
     return this.#sharedMessages$ as Observable<T>;
   };
 
-  get status$(): Observable<Status> {
-    return this.#statusSubject.asObservable();
+  get status$(): Observable<ConnectionStatus> {
+    return this.#status$.asObservable();
   }
 
-  disconnect = (): void => {
-    if (!this.#messagesSubscription) throw new Error(`socket connection was not yet established`);
-    this.#statusSubject.next(CONN_STATUS.disconnected);
-    this.#messagesSubscription.unsubscribe();
-    this.#messagesSubscription = undefined;
+  disconnect = () => {
+    if (!this.#eventsSubscription) throw new Error(`socket connection was not yet established`);
+    this.#status$.next(CONNECTION_STATUS.disconnected);
+    this.#eventsSubscription.unsubscribe();
+    this.#eventsSubscription = undefined;
   };
 
-  forceReconnect = (errorMessage: string = FORCE_RECONNECT_MESSAGE): void => {
-    this.#forceReconnectSubject.next(errorMessage);
+  forceReconnect = (errorMessage: string = FORCE_RECONNECT_MESSAGE) => {
+    this.#forceReconnect$.next(errorMessage);
   };
 
   getStreamHandler = <TEvent, TRes = TEvent, TReq = unknown, TErr = unknown>(
@@ -187,7 +188,7 @@ export class WebSocketConnector<T extends WebSocketMessageType = WebSocketMessag
         filterNullAndUndefined(),
         transformRequests,
         concatMap((currentProcessingRequest) => {
-          const defaultTransformResponse = identity as TransformResponseOperator<TEvent, TRes>;
+          const defaultTransformResponse = identity as TransformOperator<TEvent, TRes>;
           const { request, transformResponse = defaultTransformResponse } =
             currentProcessingRequest;
 
@@ -207,7 +208,8 @@ export class WebSocketConnector<T extends WebSocketMessageType = WebSocketMessag
           const wsDisconnectedStatus$ = this.status$.pipe(
             filter(
               (status) =>
-                status === CONN_STATUS.disconnected || status === CONN_STATUS.reconnecting,
+                status === CONNECTION_STATUS.disconnected ||
+                status === CONNECTION_STATUS.reconnecting,
             ),
             tap(() => {
               $.next(uninitializedValue);
@@ -235,7 +237,7 @@ export class WebSocketConnector<T extends WebSocketMessageType = WebSocketMessag
           );
 
           const wsConnectedStatus$ = this.status$.pipe(
-            filter((x) => x === CONN_STATUS.connected),
+            filter((x) => x === CONNECTION_STATUS.connected),
             take(1),
           );
 

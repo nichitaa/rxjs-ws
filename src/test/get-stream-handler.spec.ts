@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TestScheduler } from 'rxjs/testing';
 import { getMockWebsocketConnector } from './get-mock-websocket.connector';
-import { STREAM_STATUS } from '../web-socket-connector/constants';
+import { STREAM_STATUS } from '../core/constants';
 import { delay, filter, identity, scan, tap } from 'rxjs';
-import { ErrorWithReasonAndCode } from '../create-web-socket-observable';
 
 interface TestEvent {
   from: string;
@@ -217,6 +216,12 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
   it('takes until websocket status is not disconnected', () => {
     const { wsConnector, socket } = getMockWebsocketConnector();
 
+    const closeEvent = new CloseEvent('Close Event', {
+      code: 1,
+      reason: 'some reason',
+      wasClean: true,
+    });
+
     const handler = wsConnector.getStreamHandler<TestEvent, TestEvent, TestEvent, unknown>();
     const expectedMarbles = '(ab)(ccc)(de)';
     const expectedValues = {
@@ -243,11 +248,7 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
       e: {
         status: STREAM_STATUS.ready,
         response: undefined,
-        error: new ErrorWithReasonAndCode({
-          message: 'Unexpected WebSocket close',
-          code: 1,
-          reason: 'test',
-        }),
+        error: closeEvent,
       },
     };
 
@@ -267,7 +268,7 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
         socket.send(JSON.stringify({ from: 'b' }));
       },
       c: () => {
-        socket.onclose!({ reason: 'test', code: 1 } as CloseEvent);
+        socket.onclose!(closeEvent);
       },
     };
 
