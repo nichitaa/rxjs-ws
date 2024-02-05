@@ -14,5 +14,10 @@ jobs:
         with:
           node-version: '20.x'
           registry-url: 'https://registry.npmjs.org'
-      - run: npm i
-      - run: npm run build && npm run lint
+      - name: Install dependencies, lint, test, build, publint
+        run: |
+          npm i
+          npm run lint
+          npm run test
+          npm run build
+          npm run publint
