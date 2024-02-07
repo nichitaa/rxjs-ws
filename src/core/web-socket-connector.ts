@@ -34,10 +34,11 @@ import {
   SerializeFn,
   ConnectionStatus,
   StreamHandlerParams,
-  StreamHandlerSendRequestParams,
+  SendRequestParams,
   StreamResponse,
   TransformOperator,
   WebSocketConnectorConfig,
+  StreamHandler,
 } from './types';
 import { CONNECTION_STATUS, FORCE_RECONNECT_MESSAGE, STREAM_STATUS } from './constants';
 import { defaultDeserializer, defaultSerializer, filterNullAndUndefined } from './utils';
@@ -164,7 +165,7 @@ export class WebSocketConnector {
 
   getStreamHandler = <TEvent, TRes = TEvent, TReq = unknown, TErr = unknown>(
     params: Partial<StreamHandlerParams<TEvent, TRes, TReq>> = {},
-  ) => {
+  ): StreamHandler<TEvent, TRes, TReq, TErr> => {
     const {
       default: defaultResponse = undefined,
       transformRequests = identity,
@@ -173,9 +174,9 @@ export class WebSocketConnector {
       awaitReadyStatusBeforeNextRequest = true,
     } = params;
 
-    const requests$ = new BehaviorSubject<
-      undefined | StreamHandlerSendRequestParams<TEvent, TRes, TReq>
-    >(undefined);
+    const requests$ = new BehaviorSubject<undefined | SendRequestParams<TEvent, TRes, TReq>>(
+      undefined,
+    );
 
     const uninitializedValue: StreamResponse<TRes, TReq, TErr> = {
       status: STREAM_STATUS.uninitialized,
@@ -273,7 +274,7 @@ export class WebSocketConnector {
         },
       });
 
-    const send = (params: StreamHandlerSendRequestParams<TEvent, TRes, TReq>) => {
+    const send = (params: SendRequestParams<TEvent, TRes, TReq>) => {
       // create a shallow copy of the send request params to referentially check it in nextRequest$
       requests$.next({ ...params });
     };
