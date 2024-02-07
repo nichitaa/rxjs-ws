@@ -1,4 +1,4 @@
-import { Observable, RetryConfig } from 'rxjs';
+import { BehaviorSubject, Observable, RetryConfig } from 'rxjs';
 import { CONNECTION_STATUS, STREAM_STATUS } from './constants';
 import { defaultCreateWebSocketInstance } from './utils';
 
@@ -44,15 +44,21 @@ export interface StreamResponse<TRes, TReq, TErr> {
   error?: TErr;
 }
 
-export interface StreamHandlerParams<TEvent, TRes, TReq> {
+export interface StreamHandlerParams<TEvent, TRes = TEvent, TReq = unknown> {
   default: TRes;
-  transformRequests: TransformOperator<StreamHandlerSendRequestParams<TEvent, TRes, TReq>>;
+  transformRequests: TransformOperator<SendRequestParams<TEvent, TRes, TReq>>;
   resetResponseOnNextRequest: boolean;
   resetErrorOnNextRequest: boolean;
   awaitReadyStatusBeforeNextRequest: boolean;
 }
 
-export interface StreamHandlerSendRequestParams<TEvent, TRes, TReq> {
+export interface StreamHandler<TEvent, TRes = TEvent, TReq = unknown, TErr = unknown> {
+  $: BehaviorSubject<StreamResponse<TRes, TReq, TErr>>;
+
+  send(params: SendRequestParams<TEvent, TRes, TReq>): void;
+}
+
+export interface SendRequestParams<TEvent, TRes, TReq> {
   request: TReq;
   transformResponse?: TransformOperator<TEvent, TRes>;
 }
