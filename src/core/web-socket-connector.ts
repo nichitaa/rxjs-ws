@@ -39,6 +39,7 @@ import {
   TransformOperator,
   WebSocketConnectorConfig,
   StreamHandler,
+  TransformResponse,
 } from './types';
 import { CONNECTION_STATUS, FORCE_RECONNECT_MESSAGE, STREAM_STATUS } from './constants';
 import { defaultDeserializer, defaultSerializer, filterNullAndUndefined } from './utils';
@@ -163,39 +164,46 @@ export class WebSocketConnector {
     this.#forceReconnect$.next(errorMessage);
   };
 
-  getStreamHandler = <TEvent, TRes = TEvent, TReq = unknown, TErr = unknown>(
-    params: Partial<StreamHandlerParams<TEvent, TRes, TReq>> = {},
-  ): StreamHandler<TEvent, TRes, TReq, TErr> => {
+  getStreamHandler = <TEvent, TRes = TEvent, TReqIn = unknown, TReqOut = TReqIn, TErr = unknown>(
+    params: Partial<StreamHandlerParams<TEvent, TRes, TReqIn, TReqOut>> = {},
+  ): StreamHandler<TEvent, TRes, TReqIn, TReqOut, TErr> => {
+    const defaultTransformRequest = identity as TransformOperator<
+      SendRequestParams<TEvent, TRes, TReqIn>,
+      SendRequestParams<TEvent, TRes, TReqOut>
+    >;
+
     const {
       default: defaultResponse = undefined,
-      transformRequests = identity,
+      transformRequests = defaultTransformRequest,
       resetResponseOnNextRequest = true,
       resetErrorOnNextRequest = true,
       awaitReadyStatusBeforeNextRequest = true,
     } = params;
 
-    const requests$ = new BehaviorSubject<undefined | SendRequestParams<TEvent, TRes, TReq>>(
+    const requests$ = new BehaviorSubject<undefined | SendRequestParams<TEvent, TRes, TReqIn>>(
       undefined,
     );
-
-    const uninitializedValue: StreamResponse<TRes, TReq, TErr> = {
+    const uninitializedValue: StreamResponse<TRes, TReqOut, TErr> = {
       status: STREAM_STATUS.uninitialized,
       response: defaultResponse,
     };
+    const $ = new BehaviorSubject<StreamResponse<TRes, TReqOut, TErr>>(uninitializedValue);
+    const userRequests$ = requests$.pipe(filterNullAndUndefined(), transformRequests);
 
-    const $ = new BehaviorSubject<StreamResponse<TRes, TReq, TErr>>(uninitializedValue);
-
-    requests$
+    userRequests$
       .pipe(
-        filterNullAndUndefined(),
-        transformRequests,
         concatMap((currentProcessingRequest) => {
-          const defaultTransformResponse = identity as TransformOperator<TEvent, TRes>;
+          const defaultTransformResponse = (() => identity) as TransformResponse<
+            TEvent,
+            TRes,
+            TReqOut
+          >;
+
           const { request, transformResponse = defaultTransformResponse } =
             currentProcessingRequest;
 
           const ready$ = this.messages<TEvent>().pipe(
-            transformResponse,
+            transformResponse(request),
             map((response) => ({
               response,
               error: undefined,
@@ -221,7 +229,7 @@ export class WebSocketConnector {
           );
 
           const newRequest$ = defer(() => {
-            const nextRequest$ = requests$.pipe(
+            const nextRequest$ = userRequests$.pipe(
               filter((x) => x !== currentProcessingRequest),
               take(1),
             );
@@ -244,7 +252,7 @@ export class WebSocketConnector {
             take(1),
           );
 
-          const loading$: Observable<StreamResponse<TRes, TReq, TErr>> = wsConnectedStatus$.pipe(
+          const loading$: Observable<StreamResponse<TRes, TReqOut, TErr>> = wsConnectedStatus$.pipe(
             concatMap(() =>
               of({
                 status: STREAM_STATUS.loading,
@@ -274,7 +282,7 @@ export class WebSocketConnector {
         },
       });
 
-    const send = (params: SendRequestParams<TEvent, TRes, TReq>) => {
+    const send = (params: SendRequestParams<TEvent, TRes, TReqIn>) => {
       // create a shallow copy of the send request params to referentially check it in nextRequest$
       requests$.next({ ...params });
     };

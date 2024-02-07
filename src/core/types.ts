@@ -37,30 +37,44 @@ export type DeserializeFn<T = unknown> = (value: unknown) => T;
 
 export type StreamStatus = (typeof STREAM_STATUS)[keyof typeof STREAM_STATUS];
 
-export interface StreamResponse<TRes, TReq, TErr> {
+export interface StreamResponse<TRes, TReqOut, TErr> {
   status: StreamStatus;
   response?: TRes;
-  request?: TReq;
+  request?: TReqOut;
   error?: TErr;
 }
 
-export interface StreamHandlerParams<TEvent, TRes = TEvent, TReq = unknown> {
+export interface StreamHandlerParams<TEvent, TRes = TEvent, TReqIn = unknown, TReqOut = TReqIn> {
   default: TRes;
-  transformRequests: TransformOperator<SendRequestParams<TEvent, TRes, TReq>>;
+  transformRequests: TransformOperator<
+    SendRequestParams<TEvent, TRes, TReqIn>,
+    SendRequestParams<TEvent, TRes, TReqOut>
+  >;
   resetResponseOnNextRequest: boolean;
   resetErrorOnNextRequest: boolean;
   awaitReadyStatusBeforeNextRequest: boolean;
 }
 
-export interface StreamHandler<TEvent, TRes = TEvent, TReq = unknown, TErr = unknown> {
-  $: BehaviorSubject<StreamResponse<TRes, TReq, TErr>>;
+export interface StreamHandler<
+  TEvent,
+  TRes = TEvent,
+  TReqIn = unknown,
+  TReqOut = TReqIn,
+  TErr = unknown,
+> {
+  $: BehaviorSubject<StreamResponse<TRes, TReqOut, TErr>>;
 
-  send(params: SendRequestParams<TEvent, TRes, TReq>): void;
+  send(params: SendRequestParams<TEvent, TRes, TReqIn>): void;
 }
 
-export interface SendRequestParams<TEvent, TRes, TReq> {
-  request: TReq;
-  transformResponse?: TransformOperator<TEvent, TRes>;
+export type TransformResponse<TEvent, TRes = TEvent, TReqOut = unknown> = (
+  request: TReqOut,
+) => TransformOperator<TEvent, TRes>;
+
+export interface SendRequestParams<TEvent, TRes = TEvent, TReqIn = unknown, TReqOut = TReqIn> {
+  request: TReqIn;
+
+  transformResponse?: TransformResponse<TEvent, TRes, TReqOut>;
 }
 
 export type TransformOperator<TIn, TOut = TIn> = (source$: Observable<TIn>) => Observable<TOut>;
