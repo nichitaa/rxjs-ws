@@ -149,7 +149,7 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
     const { wsConnector, socket } = getMockWebsocketConnector();
 
     const handler = wsConnector.getStreamHandler<TestEvent, TestEvent, TestEvent, unknown>();
-    const expectedMarbles = '(ab) 7ms c-(de)';
+    const expectedMarbles = '(ab) 7ms c 10ms de';
     const expectedValues = {
       a: {
         status: STREAM_STATUS.uninitialized,
@@ -168,20 +168,20 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
         error: undefined,
       },
       d: {
-        status: STREAM_STATUS.ready,
-        request: { from: 'a' },
-        response: { from: 'd' },
-        error: undefined,
-      },
-      e: {
         status: STREAM_STATUS.loading,
         request: { from: 'c' },
         response: undefined,
         error: undefined,
       },
+      e: {
+        status: STREAM_STATUS.ready,
+        request: { from: 'c' },
+        response: { from: 'd' },
+        error: undefined,
+      },
     };
 
-    const triggerMarbles = 'abcd';
+    const triggerMarbles = 'ab 20ms cd';
     const triggerValues = {
       a: () => {
         wsConnector.connect();
@@ -204,6 +204,70 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
       },
       d: () => {
         socket.send(JSON.stringify({ from: 'd' }));
+      },
+    };
+
+    testScheduler.run(({ expectObservable, cold }) => {
+      expectObservable(handler.$).toBe(expectedMarbles, expectedValues);
+      expectObservable(cold(triggerMarbles, triggerValues).pipe(tap((fn) => fn())));
+    });
+  });
+
+  it('process next request if stream has ready status', () => {
+    const { wsConnector, socket } = getMockWebsocketConnector();
+
+    const handler = wsConnector.getStreamHandler<TestEvent, TestEvent, TestEvent, unknown>();
+    const expectedMarbles = '(abc) 6ms d 4ms e';
+    const expectedValues = {
+      a: {
+        status: STREAM_STATUS.uninitialized,
+        response: undefined,
+      },
+      b: {
+        status: STREAM_STATUS.loading,
+        request: { from: 'a' },
+        response: undefined,
+        error: undefined,
+      },
+      c: {
+        status: STREAM_STATUS.ready,
+        request: { from: 'a' },
+        response: { from: 'a' },
+        error: undefined,
+      },
+      d: {
+        status: STREAM_STATUS.loading,
+        request: { from: 'b' },
+        response: undefined,
+        error: undefined,
+      },
+      e: {
+        status: STREAM_STATUS.ready,
+        request: { from: 'b' },
+        response: { from: 'c' },
+        error: undefined,
+      },
+    };
+
+    // send request - send response - wait - send request - send response
+    const triggerMarbles = 'a 10ms b 4ms c';
+    const triggerValues = {
+      a: () => {
+        wsConnector.connect();
+        socket.onopen!({} as Event);
+        handler.send({
+          request: { from: 'a' },
+        });
+        socket.send(JSON.stringify({ from: 'a' }));
+      },
+      b: () => {
+        handler.send({
+          request: { from: 'b' },
+          transformResponse: identity,
+        });
+      },
+      c: () => {
+        socket.send(JSON.stringify({ from: 'c' }));
       },
     };
 
