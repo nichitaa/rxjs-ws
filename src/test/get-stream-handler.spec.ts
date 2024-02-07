@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { TestScheduler } from 'rxjs/testing';
 import { getMockWebsocketConnector } from './get-mock-websocket.connector';
 import { STREAM_STATUS } from '../core/constants';
-import { delay, filter, identity, scan, tap } from 'rxjs';
+import { delay, filter, scan, tap } from 'rxjs';
 
 interface TestEvent {
   from: string;
