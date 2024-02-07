@@ -1,5 +1,11 @@
 # @nichitaa/rxjs-ws
 
+## 1.0.7
+
+### Patch Changes
+
+- f912170: add `StreamHandler` type
+
 ## 1.0.6
 
 ### Patch Changes
