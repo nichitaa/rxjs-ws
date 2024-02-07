@@ -1,5 +1,11 @@
 # @nichitaa/rxjs-ws
 
+## 1.0.6
+
+### Patch Changes
+
+- 00f9414: fix `getStreamHandler` processing new requests if response from previous request was some time ago
+
 ## 1.0.5
 
 ### Patch Changes
