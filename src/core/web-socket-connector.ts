@@ -18,6 +18,7 @@ import {
   race,
   retry,
   share,
+  shareReplay,
   Subject,
   Subscription,
   switchMap,
@@ -203,6 +204,7 @@ export class WebSocketConnector {
               ...value,
               status: STREAM_STATUS.ready,
             })),
+            shareReplay(1),
           );
 
           const wsDisconnectedStatus$ = this.status$.pipe(
