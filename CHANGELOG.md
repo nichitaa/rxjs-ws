@@ -1,5 +1,11 @@
 # @nichitaa/rxjs-ws
 
+## 1.0.8
+
+### Patch Changes
+
+- b48b30f: `transformRespose` operator accepts `request` as argument
+
 ## 1.0.7
 
 ### Patch Changes
