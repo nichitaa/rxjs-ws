@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { TestScheduler } from 'rxjs/testing';
 import { getMockWebsocketConnector } from './get-mock-websocket.connector';
 import { STREAM_STATUS } from '../core/constants';
-import { delay, filter, identity, scan, tap } from 'rxjs';
+import { delay, filter, scan, tap } from 'rxjs';
 
 interface TestEvent {
   from: string;
@@ -69,7 +69,6 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
       b: () => {
         handler.send({
           request: { b: true },
-          transformResponse: identity,
         });
       },
       c: () => {
@@ -120,7 +119,7 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
         socket.onopen!({} as Event);
         handler.send({
           request: { from: 'a' },
-          transformResponse: (source$) => {
+          transformResponse: () => (source$) => {
             // filter only 'b' and accumulate them
             return source$.pipe(
               filter((x) => x.from === 'b'),
@@ -188,7 +187,7 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
         socket.onopen!({} as Event);
         handler.send({
           request: { from: 'a' },
-          transformResponse: (source$) => {
+          transformResponse: () => (source$) => {
             return source$.pipe(delay(10));
           },
         });
@@ -199,7 +198,6 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
       c: () => {
         handler.send({
           request: { from: 'c' },
-          transformResponse: identity,
         });
       },
       d: () => {
@@ -263,7 +261,6 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
       b: () => {
         handler.send({
           request: { from: 'b' },
-          transformResponse: identity,
         });
       },
       c: () => {
@@ -323,7 +320,6 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
         socket.onopen!({} as Event);
         handler.send({
           request: { from: 'a' },
-          transformResponse: identity,
         });
       },
       b: () => {
@@ -395,15 +391,12 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
       a: () => {
         handler.send({
           request: { from: 'a' },
-          transformResponse: identity,
         });
         handler.send({
           request: { from: 'b' },
-          transformResponse: identity,
         });
         handler.send({
           request: { from: 'c' },
-          transformResponse: identity,
         });
       },
       b: () => {
@@ -472,18 +465,15 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
         socket.onopen!({} as Event);
         handler.send({
           request: { from: 'a' },
-          transformResponse: identity,
         });
       },
       b: () => {
         handler.send({
           request: { from: 'b1' },
-          transformResponse: identity,
         });
         socket.send(JSON.stringify({ from: 'b' }));
         handler.send({
           request: { from: 'b2' },
-          transformResponse: identity,
         });
       },
     };
