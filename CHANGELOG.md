@@ -1,5 +1,11 @@
 # @nichitaa/rxjs-ws
 
+## 1.0.9
+
+### Patch Changes
+
+- 90ac017: fix types for `TReqIn` and `TReqOut`
+
 ## 1.0.8
 
 ### Patch Changes
