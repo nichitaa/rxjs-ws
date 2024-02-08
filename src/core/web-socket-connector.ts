@@ -168,7 +168,7 @@ export class WebSocketConnector {
     params: Partial<StreamHandlerParams<TEvent, TRes, TReqIn, TReqOut>> = {},
   ): StreamHandler<TEvent, TRes, TReqIn, TReqOut, TErr> => {
     const defaultTransformRequest = identity as TransformOperator<
-      SendRequestParams<TEvent, TRes, TReqIn>,
+      SendRequestParams<TEvent, TRes, TReqIn, TReqOut>,
       SendRequestParams<TEvent, TRes, TReqOut>
     >;
 
@@ -180,9 +180,9 @@ export class WebSocketConnector {
       awaitReadyStatusBeforeNextRequest = true,
     } = params;
 
-    const requests$ = new BehaviorSubject<undefined | SendRequestParams<TEvent, TRes, TReqIn>>(
-      undefined,
-    );
+    const requests$ = new BehaviorSubject<
+      undefined | SendRequestParams<TEvent, TRes, TReqIn, TReqOut>
+    >(undefined);
     const uninitializedValue: StreamResponse<TRes, TReqOut, TErr> = {
       status: STREAM_STATUS.uninitialized,
       response: defaultResponse,
@@ -282,7 +282,7 @@ export class WebSocketConnector {
         },
       });
 
-    const send = (params: SendRequestParams<TEvent, TRes, TReqIn>) => {
+    const send = (params: SendRequestParams<TEvent, TRes, TReqIn, TReqOut>) => {
       // create a shallow copy of the send request params to referentially check it in nextRequest$
       requests$.next({ ...params });
     };
