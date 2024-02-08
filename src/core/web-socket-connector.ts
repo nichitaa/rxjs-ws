@@ -188,7 +188,11 @@ export class WebSocketConnector {
       response: defaultResponse,
     };
     const $ = new BehaviorSubject<StreamResponse<TRes, TReqOut, TErr>>(uninitializedValue);
-    const userRequests$ = requests$.pipe(filterNullAndUndefined(), transformRequests);
+    const userRequests$ = requests$.pipe(
+      filterNullAndUndefined(),
+      transformRequests,
+      shareReplay(1),
+    );
 
     userRequests$
       .pipe(
