@@ -1,5 +1,11 @@
 # @nichitaa/rxjs-ws
 
+## 1.0.10
+
+### Patch Changes
+
+- 52adc53: user request multicast operator
+
 ## 1.0.9
 
 ### Patch Changes
