@@ -47,7 +47,7 @@ export interface StreamResponse<TRes, TReqOut, TErr> {
 export interface StreamHandlerParams<TEvent, TRes = TEvent, TReqIn = unknown, TReqOut = TReqIn> {
   default: TRes;
   transformRequests: TransformOperator<
-    SendRequestParams<TEvent, TRes, TReqIn>,
+    SendRequestParams<TEvent, TRes, TReqIn, TReqOut>,
     SendRequestParams<TEvent, TRes, TReqOut>
   >;
   resetResponseOnNextRequest: boolean;
@@ -64,7 +64,7 @@ export interface StreamHandler<
 > {
   $: BehaviorSubject<StreamResponse<TRes, TReqOut, TErr>>;
 
-  send(params: SendRequestParams<TEvent, TRes, TReqIn>): void;
+  send(params: SendRequestParams<TEvent, TRes, TReqIn, TReqOut>): void;
 }
 
 export type TransformResponse<TEvent, TRes = TEvent, TReqOut = unknown> = (
