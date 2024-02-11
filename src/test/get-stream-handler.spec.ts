@@ -607,9 +607,7 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
       expectObservable(cold(triggerMarbles, triggerValues).pipe(tap((fn) => fn())));
     });
 
-    /* eslint-disable @typescript-eslint/unbound-method */
     expect(transformRequests).toHaveBeenCalledOnce();
     expect(tapFn).toHaveBeenNthCalledWith(1, request);
-    /* eslint-enable @typescript-eslint/unbound-method */
   });
 });
