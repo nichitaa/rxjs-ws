@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestScheduler } from 'rxjs/testing';
 import { getMockWebsocketConnector } from './get-mock-websocket.connector';
 import { STREAM_STATUS } from '../core/constants';
-import { delay, filter, scan, tap } from 'rxjs';
+import { delay, filter, Observable, scan, tap } from 'rxjs';
+import { SendRequestParams } from '../core/types';
 
 interface TestEvent {
   from: string;
@@ -488,6 +489,127 @@ describe('[getStreamHandler] rxjs marbles tests', () => {
     expect(socket.send).toHaveBeenNthCalledWith(2, JSON.stringify({ from: 'b' }));
     expect(socket.send).toHaveBeenNthCalledWith(3, JSON.stringify({ from: 'b1' }));
     expect(socket.send).toHaveBeenNthCalledWith(4, JSON.stringify({ from: 'b2' }));
+    /* eslint-enable @typescript-eslint/unbound-method */
+  });
+
+  it('does not reset response on next request `resetResponseOnNextRequest: false`', () => {
+    const { wsConnector, socket } = getMockWebsocketConnector();
+
+    const handler = wsConnector.getStreamHandler<TestEvent, TestEvent, TestEvent, unknown>({
+      resetResponseOnNextRequest: false,
+    });
+    const expectedMarbles = 'a(bc)de';
+    const expectedValues = {
+      a: {
+        status: STREAM_STATUS.uninitialized,
+        response: undefined,
+      },
+      b: {
+        status: STREAM_STATUS.loading,
+        request: { from: 'b' },
+        response: undefined,
+        error: undefined,
+      },
+      c: {
+        status: STREAM_STATUS.ready,
+        request: { from: 'b' },
+        response: { from: 'b' },
+        error: undefined,
+      },
+      d: {
+        status: STREAM_STATUS.loading,
+        request: { from: 'c' },
+        response: { from: 'b' },
+        error: undefined,
+      },
+      e: {
+        status: STREAM_STATUS.ready,
+        request: { from: 'c' },
+        response: { from: 'd' },
+        error: undefined,
+      },
+    };
+
+    const triggerMarbles = 'ab 3ms cd';
+    const triggerValues = {
+      a: () => {
+        wsConnector.connect();
+        socket.onopen!({} as Event);
+        socket.send(JSON.stringify({ from: 'a' }));
+      },
+      b: () => {
+        handler.send({ request: { from: 'b' } });
+        socket.send(JSON.stringify({ from: 'b' }));
+      },
+      c: () => {
+        handler.send({ request: { from: 'c' } });
+      },
+      d: () => {
+        socket.send(JSON.stringify({ from: 'd' }));
+      },
+    };
+
+    testScheduler.run(({ expectObservable, cold }) => {
+      expectObservable(handler.$).toBe(expectedMarbles, expectedValues);
+      expectObservable(cold(triggerMarbles, triggerValues).pipe(tap((fn) => fn())));
+    });
+  });
+
+  it('applies `transformRequest` operator', () => {
+    const { wsConnector, socket } = getMockWebsocketConnector();
+
+    const tapFn = vi.fn();
+    const transformRequests = vi.fn(
+      (source$: Observable<SendRequestParams<TestEvent, TestEvent, TestEvent>>) =>
+        source$.pipe(delay(10), tap(tapFn)),
+    );
+
+    const handler = wsConnector.getStreamHandler<TestEvent, TestEvent, TestEvent>({
+      transformRequests,
+    });
+    const expectedMarbles = 'a 9ms bc';
+    const expectedValues = {
+      a: {
+        status: STREAM_STATUS.uninitialized,
+        response: undefined,
+      },
+      b: {
+        status: STREAM_STATUS.loading,
+        request: { from: 'a' },
+        response: undefined,
+        error: undefined,
+      },
+      c: {
+        status: STREAM_STATUS.ready,
+        request: { from: 'a' },
+        response: { from: 'b' },
+        error: undefined,
+      },
+    };
+
+    const request: SendRequestParams<TestEvent, TestEvent, TestEvent> = { request: { from: 'a' } };
+
+    const triggerMarbles = 'a 10ms b';
+    const triggerValues = {
+      a: () => {
+        wsConnector.connect();
+        socket.onopen!({} as Event);
+        handler.send(request);
+        socket.send(JSON.stringify({ from: 'a' })); // <- ignored
+      },
+      b: () => {
+        socket.send(JSON.stringify({ from: 'b' }));
+      },
+    };
+
+    testScheduler.run(({ expectObservable, cold }) => {
+      expectObservable(handler.$).toBe(expectedMarbles, expectedValues);
+      expectObservable(cold(triggerMarbles, triggerValues).pipe(tap((fn) => fn())));
+    });
+
+    /* eslint-disable @typescript-eslint/unbound-method */
+    expect(transformRequests).toHaveBeenCalledOnce();
+    expect(tapFn).toHaveBeenNthCalledWith(1, request);
     /* eslint-enable @typescript-eslint/unbound-method */
   });
 });

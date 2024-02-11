@@ -183,28 +183,29 @@ export class WebSocketConnector {
     const requests$ = new BehaviorSubject<
       undefined | SendRequestParams<TEvent, TRes, TReqIn, TReqOut>
     >(undefined);
+
     const uninitializedValue: StreamResponse<TRes, TReqOut, TErr> = {
       status: STREAM_STATUS.uninitialized,
       response: defaultResponse,
     };
     const $ = new BehaviorSubject<StreamResponse<TRes, TReqOut, TErr>>(uninitializedValue);
-    const userRequests$ = requests$.pipe(
+
+    const transformedRequests$ = requests$.pipe(
       filterNullAndUndefined(),
       transformRequests,
       shareReplay(1),
     );
 
-    userRequests$
+    transformedRequests$
       .pipe(
-        concatMap((currentProcessingRequest) => {
+        concatMap((params) => {
           const defaultTransformResponse = (() => identity) as TransformResponse<
             TEvent,
             TRes,
             TReqOut
           >;
 
-          const { request, transformResponse = defaultTransformResponse } =
-            currentProcessingRequest;
+          const { request, transformResponse = defaultTransformResponse } = params;
 
           const ready$ = this.messages<TEvent>().pipe(
             transformResponse(request),
@@ -233,8 +234,10 @@ export class WebSocketConnector {
           );
 
           const newRequest$ = defer(() => {
-            const nextRequest$ = userRequests$.pipe(
-              filter((x) => x !== currentProcessingRequest),
+            const nextRequest$ = transformedRequests$.pipe(
+              // ignore requests that are currently in processing
+              // transformedRequests$ is multicasted - so it will always emit the last client request
+              filter((x) => x !== params),
               take(1),
             );
             return nextRequest$.pipe(
@@ -272,8 +275,8 @@ export class WebSocketConnector {
           );
 
           const concat$ = concat(loading$, ready$.pipe(takeUntil(takeUntil$))).pipe(
-            tap((value) => {
-              $.next({ ...$.value, ...value });
+            tap((streamResponse) => {
+              $.next({ ...$.value, ...streamResponse });
             }),
           );
 
@@ -291,9 +294,6 @@ export class WebSocketConnector {
       requests$.next({ ...params });
     };
 
-    return {
-      send,
-      $,
-    };
+    return { send, $ };
   };
 }
