@@ -1,5 +1,11 @@
 # @nichitaa/rxjs-ws
 
+## 1.0.11
+
+### Patch Changes
+
+- ecbd4d2: add more tests and MIT license
+
 ## 1.0.10
 
 ### Patch Changes
