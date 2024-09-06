@@ -133,10 +133,10 @@ const usersHandler = connector.getStreamHandler<WSEvent, User, UserRequest, User
   default: [],
 })
 
-const scanUsers = (source$) => {
+const scanUsers = (request) = (source$) => {
   return source$.pipe(
     // filter only users types of events
-    filter(event => event.method === 'v1.users'),
+    filter(event => event.method ===  request.method), // e.g.: request.method === 'v1/users'
     // throw error if so that handler can catch it
     tap((event) => {
       if (isError(event)) throw x
